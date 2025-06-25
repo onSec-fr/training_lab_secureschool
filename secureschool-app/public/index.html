@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="fr">
+    <head>
+        <meta charset="UTF-8" />
+        <title>SecureSchool – Student Database</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" href="styles.css" />
+        <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    </head>
+
+    <body>
+        <header>
+            <h1>🔐 SecureSchool – Student Database</h1>
+        </header>
+        <section class="login">
+            <h2>Connexion</h2>
+            <form id="loginForm">
+                <input id="username" placeholder="Nom d’utilisateur" required autofocus />
+                <br />
+                <br />
+                <input id="password" type="password" placeholder="Mot de passe" required />
+                <br />
+                <br />
+                <button type="submit">Se connecter</button>
+            </form>
+            <p id="login-error" class="error"></p>
+        </section>
+		<section class="welcome" style="display: none;">
+				<img id="profile-photo" alt="Photo de profil" width="80">
+				<div>
+					<p>Bienvenue <strong>SecureSchool Admin</strong> !</p>
+				<p>Vous êtes connecté à l'application sécurisée.</p>
+				</div>
+        </section>
+        <section class="search" style="display: none;">
+            <h2>Rechercher un étudiant</h2>
+            <form id="searchForm">
+                <input type="text" id="q" placeholder="Entrez un nom..." required />
+                <button type="submit">Rechercher</button>
+            </form>
+        </section>
+        <section class="results" style="display: none;">
+            <ul id="search-results"></ul>
+        </section>
+        <section class="shared" style="display: none;">
+            <h2>Recherches partagées avec moi</h2>
+            <ul id="shared"></ul>
+        </section>
+        <section class="creation" style="display: none;">
+            <h2>Administration</h2>
+            <button id="addStudentBtn" type="button" style="width: 200px;">➕ Enregistrer un étudiant</button>
+			<button id="clearDbBtn" type="button" style="width: 200px;">🧹 Nettoyer la base</button>
+            <p id="creation-message" class="message"></p>
+        </section>
+        <section class="logout" style="display: none;">
+            <button id="logoutBtn">Se déconnecter</button>
+        </section>
+        <footer>
+            <p>© 2025 – SecureSchool</p>
+        </footer>
+        <script>
+            function escapeHTML(str) {
+                return str.replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[m]));
+            }
+
+            async function login(e) {
+                e.preventDefault();
+                const u = $("#username").val(),
+                    p = $("#password").val();
+                const resp = await fetch("/rest/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username: u, password: p }),
+                });
+                if (resp.ok) {
+                    showApp();
+                    loadShared();
+					showWelcomeBox();
+                } else {
+                    $("#login-error").text("Identifiants incorrects");
+                }
+            }
+
+            async function logout() {
+                await fetch("/rest/logout");
+                hideApp();
+            }
+
+            function showApp() {
+                $(".login").hide();
+                $(".search, .results, .shared, .logout, .creation, .welcome",).show();
+            }
+
+            function hideApp() {
+                $(".login").show();
+                $(".search, .results, .shared, .logout, .creation, .welcome").hide();
+                $("#search-results").empty();
+            }
+
+            function search(e) {
+                e.preventDefault();
+                displayQuery($("#q").val());
+            }
+
+            function displayQuery(query) {
+                $.get(
+                    {
+                        url: "/rest/search",
+                        data: { q: query },
+                    },
+                    (results) => {
+                        $("#search-results").empty().append(`<li class="xss">Résultats de la recherche pour : ${query}</li><br>`);
+                        results.forEach((user) => {
+                            const li = document.createElement("li");
+                            const editId = `edit-btn-${user.id}`;
+
+                            li.innerHTML = `
+         <span class="user-name">${escapeHTML(user.name)}</span> –
+         <span class="user-email">${escapeHTML(user.email)}</span>
+         <button id="${editId}" class="edit-btn">✏️</button>
+         `;
+
+                            document.getElementById("search-results").appendChild(li);
+
+                            setTimeout(() => {
+                                const btn = document.getElementById(editId);
+                                if (btn) {
+                                    btn.addEventListener("click", () => editUser(li, user));
+                                }
+                            }, 0);
+                        });
+                    }
+                );
+            }
+            function editUser(li, user) {
+                const nameInput = document.createElement("input");
+                nameInput.type = "text";
+                nameInput.value = user.name;
+
+                const emailInput = document.createElement("input");
+                emailInput.type = "email";
+                emailInput.value = user.email;
+
+                const saveBtn = document.createElement("button");
+                saveBtn.textContent = "💾";
+
+                li.innerHTML = "";
+                li.append(nameInput, document.createTextNode(" – "), emailInput, saveBtn);
+
+                saveBtn.addEventListener("click", async () => {
+                    const updatedUser = {
+                        name: nameInput.value,
+                        email: emailInput.value,
+                    };
+                    const resp = await fetch(`/rest/users/${user.id}`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(updatedUser),
+                    });
+                    if (resp.ok) {
+                        displayQuery(updatedUser.name);
+                    } else {
+                        alert("Erreur lors de la mise à jour");
+                    }
+                });
+            }
+
+            function showAddStudentForm() {
+                const section = document.querySelector(".creation");
+                const msg = document.getElementById("creation-message");
+                msg.textContent = "";
+                msg.classList.remove("error");
+
+                const existingForm = section.querySelector("form");
+                if (existingForm) existingForm.remove();
+
+                const form = document.createElement("form");
+
+                const nameInput = document.createElement("input");
+                nameInput.placeholder = "Nom";
+                nameInput.required = true;
+
+                const emailInput = document.createElement("input");
+                emailInput.placeholder = "Email";
+                emailInput.type = "email";
+                emailInput.required = true;
+
+                const submitBtn = document.createElement("button");
+                submitBtn.type = "submit";
+                submitBtn.textContent = "Créer";
+
+                form.append(nameInput, document.createTextNode(" – "), emailInput, submitBtn);
+                section.appendChild(form);
+
+                section.style.display = "block";
+
+                form.addEventListener("submit", async (e) => {
+                    e.preventDefault();
+                    const newUser = {
+                        name: nameInput.value.trim(),
+                        email: emailInput.value.trim(),
+                    };
+                    const resp = await fetch("/rest/users", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(newUser),
+                    });
+                    if (resp.ok) {
+                        msg.textContent = "Étudiant ajouté avec succès.";
+                        msg.classList.remove("error");
+                        form.remove();
+                        const q = document.getElementById("q").value || "";
+                        if (q) displayQuery(q);
+                    } else {
+                        msg.textContent = "Erreur lors de la création.";
+                        msg.classList.add("error");
+                    }
+                });
+            }
+			
+			function clearDb() {
+			  fetch('/rest/cleardb', {
+				method: 'GET',
+				credentials: 'include'
+			  })
+			  .then(response => {
+				if (!response.ok) {
+					alert("❌ Échec : impossible de réinitialiser la base.");
+					return;
+				}
+				return response.json();
+			  })
+			  .then(data => {
+				if (data) {
+					alert("✅ Base des étudiants vidée avec succès !");
+				}
+			  })
+			  .catch(() => {
+				alert("❌ Une erreur est survenue pendant la requête.");
+			  });
+			}
+
+            function loadShared() {
+                $.get(
+                    {
+                        url: "/rest/requests",
+                    },
+                    (shared) => {
+                        $("#shared").empty();
+                        shared.forEach((r) => {
+                            $("#shared").append(`<li><a href="?request=${r.id}">#${r.id}: ${escapeHTML(r.query)}</a></li>`);
+                        });
+                        $(".shared").show();
+                    }
+                );
+            }
+			
+			function showWelcomeBox() {
+				document.getElementById('profile-photo').src = '/rest/profile-photo';
+			}
+			
+            document.addEventListener("DOMContentLoaded", () => {
+                document.getElementById("loginForm").addEventListener("submit", login);
+                document.getElementById("searchForm").addEventListener("submit", search);
+                document.getElementById("logoutBtn").addEventListener("click", logout);
+                document.getElementById("addStudentBtn").addEventListener("click", showAddStudentForm);
+				document.getElementById("clearDbBtn").addEventListener("click", clearDb);
+				
+                // Vérifie l'authentification
+                fetch("/rest/auth").then((resp) => {
+                    if (resp.ok) {
+                        showApp();
+                        loadShared();
+						showWelcomeBox()
+                    } else {
+                        hideApp();
+                    }
+                });
+
+                // Gestion d’une requête partagée
+                const id = new URLSearchParams(window.location.search).get("request");
+                if (id) {
+                    $.get({
+                        url: "/rest/requests/" + id,
+                    }).done((d) => {
+                        if (d.query) displayQuery(d.query);
+                    });
+                }
+            });
+        </script>
+    </body>
+</html>

